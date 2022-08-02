@@ -47,10 +47,7 @@ def get_url(url,
     path = urlsplit(url)[2]
     filename = os.path.basename(path)
     local_file_path = os.path.join(download_dir, filename)
-    if show_progress:
-        options = '-fL'
-    else:
-        options = '-sfL'
+    options = '-fL' if show_progress else '-sfL'
     need_download = True
     while need_download:
         curl_cmd = ['/usr/bin/curl', options,
@@ -67,9 +64,9 @@ def get_url(url,
                 curl_cmd.extend(['-z', local_file_path])
             else:
                 resumed = True
-                curl_cmd.extend(['-z', '-' + local_file_path, '-C', '-'])
+                curl_cmd.extend(['-z', f'-{local_file_path}', '-C', '-'])
         curl_cmd.append(url)
-        print("Downloading %s..." % url)
+        print(f"Downloading {url}...")
         need_download = False
         try:
             _ = subprocess.check_output(curl_cmd)
@@ -80,7 +77,7 @@ def get_url(url,
             # file is up-to-date
             # HTTP error 412 on resume: the file was updated server-side
             if int(err.output) == 412:
-                print("Removing %s and retrying." % local_file_path)
+                print(f"Removing {local_file_path} and retrying.")
                 os.unlink(local_file_path)
                 need_download = True
             elif int(err.output) != 416:
@@ -119,9 +116,9 @@ IPSW_DATA = None
 def get_ipsw_data():
     '''Return data from com_apple_macOSIPSW.xml (which is actually a plist)'''
     global IPSW_DATA
-    IPSW_FEED = "https://mesu.apple.com/assets/macos/com_apple_macOSIPSW/com_apple_macOSIPSW.xml"
-
     if not IPSW_DATA:
+        IPSW_FEED = "https://mesu.apple.com/assets/macos/com_apple_macOSIPSW/com_apple_macOSIPSW.xml"
+
         try:
             ipsw_plist = get_url(IPSW_FEED)
             IPSW_DATA = read_plist(ipsw_plist)
@@ -139,7 +136,7 @@ def getMobileDeviceSoftwareVersionsByVersion():
 
 def getMobileDeviceSoftwareVersions(version=1):
     '''Return the dict under the version number key. Current xml has only "1"'''
-    return getMobileDeviceSoftwareVersionsByVersion().get("%s" % version, {})
+    return getMobileDeviceSoftwareVersionsByVersion().get(f"{version}", {})
 
 
 def getMachineModelsForMobileDeviceSoftwareVersions(version=1):
@@ -166,10 +163,9 @@ def getIPSWInfoForMachineModel(model, version=1):
             build_dict = model_versions["Unknown"].get("Universal", {})
         else:
             build_dict = model_versions[key]
-        restore_info = build_dict.get("Restore")
-        if restore_info:
+        if restore_info := build_dict.get("Restore"):
             model_info = {"model": model}
-            model_info.update(restore_info)
+            model_info |= restore_info
             model_info_list.append(model_info)
     return model_info_list
 
@@ -209,12 +205,11 @@ def main():
         print('Exiting.')
         exit(0)
 
-    download_url = getAllModelInfo()[index].get("FirmwareURL")
-    if download_url:
+    if download_url := getAllModelInfo()[index].get("FirmwareURL"):
         try:
             filepath = get_url(download_url,
                 download_dir=".", show_progress=True, attempt_resume=True)
-            print("IPSW downloaded to: %s" % filepath)
+            print(f"IPSW downloaded to: {filepath}")
         except (ReplicationError, IOError, OSError) as err:
             print(err, file=sys.stderr)
             exit(1)
